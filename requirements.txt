@@ -1,0 +1,7 @@
+numpy~=1.24.3
+networkx~=2.8.8
+tqdm~=4.65.0
+eeglib~=0.4.1
+sklearn~=0.0.post5
+scikit-learn~=1.2.2
+node2vec~=0.4.6
