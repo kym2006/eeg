@@ -20,7 +20,7 @@ not_stressed = []
 W = 2500
 dataset=[]
 S = 35
-for t in tqdm(range(0, S)):
+for t in range(0, S):
     print(t)
     unstressed_file = "Subject"+str(t).rjust(2, '0')+"_1.edf"
     stressed_file = "Subject"+str(t).rjust(2, '0')+"_2.edf"
