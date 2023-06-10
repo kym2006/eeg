@@ -1,5 +1,4 @@
 
-import pandas as pd
 import numpy as np
 import os
 from tqdm.notebook import tqdm
@@ -7,7 +6,6 @@ from eeglib.helpers import EDFHelper
 from sklearn.decomposition import PCA
 import networkx as nx
 from node2vec import Node2Vec
-
 data_path = "data"
 # find all files in the data directory
 files = os.listdir(data_path)
@@ -19,11 +17,11 @@ not_stressed = []
 # x is a pd dataframe with the features
 
 # gt is a list of booleans, true if stressed, false if not
-W = 1000
-overlap = 250
+W = 2500
 dataset=[]
-S = 1
-for t in tqdm(range(0,S)):
+S = 35
+for t in tqdm(range(0, S)):
+    print(t)
     unstressed_file = "Subject"+str(t).rjust(2, '0')+"_1.edf"
     stressed_file = "Subject"+str(t).rjust(2, '0')+"_2.edf"
     # read the edf file
@@ -35,55 +33,54 @@ for t in tqdm(range(0,S)):
     matrices = []
     for file in [unstressed_file, stressed_file]:
         helper= EDFHelper("data/"+str(file), sampleRate=500, lowpass=30, highpass=0.5, windowSize=W)
-        count =0
-        for eeg in tqdm(helper):
-            print(count)
-            count +=1
+        cnt = 0
+        for eeg in helper:
+            cnt += 1
+            print(cnt)
             # for this particular window
             dat = eeg.getChannel()
             # create N by N matrix
 
             l = len(dat)
             mat = [[0 for i in range(l)] for j in range(l)]
+
+
             for i in range(l):
-                for j in range(i,l):
+                for j in range(l):
                     # calculate pearson's correlation between dat[i] and dat [j]
                     # use eeg CCC
-                    mat[i][j] = eeg.DTW(channels=[i, j])
-                    mat[j][i] = mat[i][j]
+                    mat[i][j] = 1 - eeg.DTW(channels=[i, j])[0]
+                    #mat[i][j] = 1 - abs(np.(dat[i], dat[j])[0][1]) # pearson's correlation coefficient distance
+            '''
+            # floyd warshall to find the shortest path HAHAHAHAHHA LOL HAHAHAHAHAHAHAHHA
+            for k in range(l):
+                for i in range(l):
+                    for j in range(l):
+                        if i != j:
+                            mat[i][j] = min(mat[i][j], mat[i][k] + mat[k][j])
+            '''
+            G = nx.Graph()
+            for i in range(l):
+                G.add_node(i)
 
+            for i in range(l):
+                for j in range(l):
+                    if i != j:
+                        #print(i,j,mat[i][j])
+                        G.add_edge(i, j, weight=mat[i][j])
 
-                    #mat[i][j] = np.corrcoef(dat[i], dat[j])[0][1]
-            matrices.append(mat)
+            node2vec = Node2Vec(G, dimensions=10, walk_length=16, num_walks=100, workers=8, quiet=True)
+            # TODO: remember to add more dimensions
+            model = node2vec.fit()
+            vecs = model.wv
+            vecs = np.array([vecs[i] for i in range(l)])
+            vecs = vecs.flatten(order='C')
+
+            vectors.append(vecs)
             gt.append(is_stressed)
         is_stressed = True
 
-
-    # convert the list of matrices to a list of features
-    nw = len(matrices)
-    B = [[0 for i in range(nw)] for j in range(nw)]
-        #create a new nx graph
-    G = nx.Graph()
-        # create nodes in the graph
-    for i in range(nw):
-        G.add_node(i)
-    for i in range(nw):
-        for j in range(nw):
-            if i != j:
-                    # calculate the similarity between matrices[i] and matrices[j]
-                G.add_edge(i, j, weight=np.linalg.norm(np.array(matrices[i]) - np.array(matrices[j])))
-    # create a node2vec object
-    node2vec = Node2Vec(G, dimensions=30, walk_length=16, num_walks=100, workers=8)
-    # train node2vec
-    model = node2vec.fit()
-    # get the vectors
-    vecs=model.wv
-    # convert the vectors to a list
-    vecs = [vecs[i] for i in range(nw)]
-    vectors.extend(vecs)
-
     dataset.append((vectors, gt))
-
 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
@@ -105,16 +102,13 @@ classifiers = [
     DecisionTreeClassifier(),
     MLPClassifier(alpha=1, max_iter=1000),
     AdaBoostClassifier(),
-    GaussianNB(),
-    QuadraticDiscriminantAnalysis()
 ]
 for classifier in classifiers:
 
     accuracies = []
     for person in dataset:
-        x=person[0]
-        gt=person[1]
-        x=pd.DataFrame(x)
+        x = np.array(person[0])
+        gt = person[1]
         # convert x from a list to a pd dataframe
 
         # convert gt from a list to a pd dataframe
@@ -138,3 +132,4 @@ for classifier in classifiers:
 
     #print(accuracies)
     print(f"Average Accuracy of {classifier}", np.mean(accuracies))
+    print(accuracies)
